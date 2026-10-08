@@ -9,21 +9,26 @@
     var header = $('.menu-sticky');
     var win = $(window);
 
+    var scrollTicking = false;
     win.on('scroll', function () {
-        var scroll = win.scrollTop();
-        if (scroll < 170) {
-            header.removeClass("sticky");
-        } else {
-            header.addClass("sticky");
-        }
-
-        $("section").each(function () {
-            var elementTop = $(this).offset().top - $('#rs-header').outerHeight();
-            if (scroll >= elementTop) {
-                $(this).addClass('loaded');
+        if (scrollTicking) return;
+        scrollTicking = true;
+        window.requestAnimationFrame(function () {
+            scrollTicking = false;
+            var scroll = win.scrollTop();
+            if (scroll < 170) {
+                header.removeClass("sticky");
+            } else {
+                header.addClass("sticky");
             }
-        });
 
+            var headerHeight = $('#rs-header').outerHeight();
+            $("section:not(.loaded)").each(function () {
+                if (scroll >= $(this).offset().top - headerHeight) {
+                    $(this).addClass('loaded');
+                }
+            });
+        });
     });
 	
     $(document).ready(function () {
@@ -126,8 +131,7 @@
         });
     }
 
-    // wow init
-    new WOW().init();
+    // wow init: done once in main2.js
 
 
     //===== Odometer js
@@ -210,10 +214,9 @@
         });
     }
 
-    //preloader - hide as soon as the DOM is ready instead of waiting for every image/third-party script
+    //preloader overlay was removed from the layout (CSS is render-blocking / inlined, so there is no flash of unstyled content)
     $(function () {
-        $("#pre-load").fadeOut(100);
-        $(".pre-loader").fadeOut(100);
+        $("#pre-load").remove();
     });
     $(window).on('load', function () {
 
@@ -266,6 +269,8 @@
         OwlCarousel
     -------------------------------------*/
     $('.rs-carousel').each(function () {
+      // hero carousel starts straight away (own task); the others when they are about to scroll into view
+      var init = function () {
         var owlCarousel = $(this),
             loop = owlCarousel.data('loop'),
             items = owlCarousel.data('items'),
@@ -334,6 +339,24 @@
                 }
             }
         });
+      };
+      if ($(this).closest('.rs-slider').length) {
+        // The first slide is already visible (pre-init CSS), so the carousel is only started once the page has settled
+        // (2.5 s after load) or as soon as the visitor touches the page - whichever comes first. Its first automatic
+        // slide change is 4 s away anyway, and this keeps the ~150 ms initialisation out of the critical loading phase.
+        var self = this, started = false;
+        var start = function () {
+          if (started) return;
+          started = true;
+          ['pointerdown', 'touchstart', 'keydown', 'wheel'].forEach(function (ev) { window.removeEventListener(ev, onGesture); });
+          setTimeout(function () { init.call(self); }, 0);
+        };
+        var onGesture = function (e) { if (!e || e.isTrusted !== false) start(); };
+        ['pointerdown', 'touchstart', 'keydown', 'wheel'].forEach(function (ev) { window.addEventListener(ev, onGesture, { passive: true }); });
+        if (document.readyState === 'complete') setTimeout(start, 2500);
+        else window.addEventListener('load', function () { setTimeout(start, 2500); });
+      }
+      else { window.lazyInit(this, init); }
     });
 
 
